@@ -4,6 +4,25 @@ PluginManager is a library that can be easily integrated with your software to a
 
 ## Usage
 
+```xml
+<project>
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
+    
+    <dependencies>
+        <dependency>
+            <groupId>dev.truewinter</groupId>
+            <artifactId>PluginManager</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+    </dependencies>
+</project>
+```
+
 The default plugin manager requires a `plugin.yml` to be included in the plugin containing the following:
 
 ```yaml
@@ -76,4 +95,4 @@ public class CoolPlugin extends CoolSoftwarePlugin {
 
 ## Docs
 
-Coming soon
+[Javadoc available on Jitpack](https://javadoc.jitpack.io/com/github/TrueWinter/PluginManager/latest/javadoc/)
