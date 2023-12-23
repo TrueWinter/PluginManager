@@ -1,14 +1,19 @@
 package dev.truewinter.PluginManager;
 
+import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
@@ -67,13 +72,21 @@ public abstract class AbstractPluginManager<T> {
                 // the exception handler will know what plugin caused it.
                 thisPlugin = pluginInstance;
 
-                Method setNameMethod = traverseSuperClassesForSetName(pluginClass);
-                if (setNameMethod == null) {
-                    logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.UNKNOWN_PLUGIN_ERROR, name));
-                    continue;
+                invoke(pluginClass, pluginInstance, name,
+                        new MethodConfig("setName", String.class), name);
+
+                invoke(pluginClass, pluginInstance, name,
+                        new MethodConfig("setDirectory", String.class), file.getParent());
+
+                URL defaultConfigUrl = plugin.getResource(pluginInstance.getConfigFileName());
+                if (defaultConfigUrl != null) {
+                    try (InputStream is = defaultConfigUrl.openStream()) {
+                        invoke(pluginClass, pluginInstance, name,
+                                new MethodConfig("setDefaultConfig", String.class),
+                                IOUtils.toString(is, StandardCharsets.UTF_8));
+                    }
                 }
-                setNameMethod.setAccessible(true);
-                setNameMethod.invoke(pluginInstance, name);
+
                 plugins.put(name, pluginInstance);
 
                 Method onLoadMethod = pluginClass.getDeclaredMethod("onLoad");
@@ -115,15 +128,29 @@ public abstract class AbstractPluginManager<T> {
         });
     }
 
+    @SuppressWarnings("rawtypes")
+    private record MethodConfig(String method, Class... types) {}
+
+    @SuppressWarnings({"rawtypes", "BooleanMethodIsAlwaysInverted"})
+    private void invoke(Class pluginClass, Plugin<T> pluginInstance, String name,
+                           MethodConfig methodConfig, Object... param) throws Exception {
+        Method methodToCall = traverseSuperClassesForMethod(pluginClass, methodConfig.method(), methodConfig.types());
+        if (methodToCall == null) {
+            throw new Exception("Method " + methodConfig.method() + " missing from class");
+        }
+        methodToCall.setAccessible(true);
+        methodToCall.invoke(pluginInstance, param);
+    }
+
     @Nullable
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Method traverseSuperClassesForSetName(Class pluginClass) {
+    private Method traverseSuperClassesForMethod(Class pluginClass, String method, Class... types) {
         try {
-            return pluginClass.getDeclaredMethod("setName", String.class);
+            return pluginClass.getDeclaredMethod(method, types);
         } catch (NoSuchMethodException e) {
             Class superClass = pluginClass.getSuperclass();
             if (superClass != null) {
-                return traverseSuperClassesForSetName(superClass);
+                return traverseSuperClassesForMethod(superClass, method, types);
             }
 
             return null;

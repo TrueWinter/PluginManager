@@ -1,6 +1,11 @@
 package dev.truewinter.PluginManager;
 
+import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.NotNull;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * <p>You should extend this class and all plugins must extend your new Plugin class.
@@ -10,23 +15,96 @@ import org.jetbrains.annotations.NotNull;
  *   <li>software developer: This is a developer who uses PluginManager in their software</li>
  *   <li>plugin developer: This is a developer who creates plugins for software that uses PluginManager</li>
  * </ul>
+ * <p><strong>Important: Do not call any methods, with the exception of
+ * ensureNoApiInteractionInConstructor(), before the onLoad() method has
+ * been called. Doing so will result in unexpected results.</strong></p>
  */
 @SuppressWarnings("unused")
 public abstract class Plugin<T> {
     private String name = null;
+    private String directory = null;
+    private String defaultConfig = null;
 
-    /**
-     * @hidden
-     */
+    protected final void ensureNoApiInteractionInConstructor() {
+        if (getName() == null) {
+            throw new RuntimeException("Attempting to interact with the API before the onLoad() method is called is not allowed");
+        }
+    }
+
     private void setName(String name) {
         this.name = name;
+    }
+
+    private void setDirectory(String directory) {
+        this.directory = directory;
+    }
+
+    private void setDefaultConfig(String defaultConfig) {
+        this.defaultConfig = defaultConfig;
     }
 
     /**
      * @return The plugin's name
      */
     protected final String getName() {
+        // This method is used internally before the plugin is loaded,
+        // so don't call ensureNoApiInteractionInConstructor() here
         return name;
+    }
+
+    /**
+     * Returns the name of the config file, defaulting
+     * to <code>config.yml</code>. This should be the
+     * same name as the config file in the JAR file,
+     * and will be used by other configuration related
+     * methods.
+     * @implementor software developer
+     */
+    protected String getConfigFileName() {
+        return "config.yml";
+    }
+
+    /**
+     * Returns the relative location of the configuration
+     * file on disk,
+     * defaulting to <code>{name}/{configFileName}</code>
+     * @implementor software developer
+     */
+    protected String getConfigFileDiskLocation() {
+        ensureNoApiInteractionInConstructor();
+        return name + "/" + getConfigFileName();
+    }
+
+    /**
+     * Returns a {@link File} referencing the absolute
+     * path of the configuration file.
+     */
+    protected final File getConfig() {
+        ensureNoApiInteractionInConstructor();
+        return new File(directory, getConfigFileDiskLocation());
+    }
+
+    /**
+     * Copies the default configuration, if it exists, from the plugin
+     * to the File returned by {@link Plugin#getConfig()}. If the file
+     * already exists, it will not be overwritten.
+     * @throws IOException if copying the default configuration failed
+     * @throws NullPointerException if the default configuration does not exist
+     */
+    protected final void copyDefaultConfig() throws IOException, NullPointerException {
+        if (defaultConfig == null) {
+            throw new NullPointerException();
+        }
+
+        if (getConfig().exists()) return;
+
+        if (!getConfig().getParentFile().exists() && !getConfig().getParentFile().mkdirs()) {
+            throw new IOException("Failed to create parent directory");
+        }
+
+        try (OutputStream outputStream = new FileOutputStream(getConfig())) {
+            IOUtils.write(defaultConfig, outputStream, StandardCharsets.UTF_8);
+        }
     }
 
     /**
