@@ -6,7 +6,7 @@
 
     <groupId>dev.truewinter</groupId>
     <artifactId>PluginManager</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
 
     <build>
         <finalName>PluginManager-${project.version}</finalName>
@@ -37,6 +37,37 @@
                         </tag>
                     </tags>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <minimizeJar>false</minimizeJar>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <!--
+                                            A dependency's license is being placed at the root of the JAR file,
+                                            which incorrectly implies that the PluginManager is licensed under
+                                            that license.
+                                         -->
+                                        <exclude>LICENSE</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
