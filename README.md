@@ -50,6 +50,11 @@ public class PluginLoader {
         // This variable should contain a list of plugins, including CoolPlugin
         List<File> pluginJars = new ArrayList<>();
         pluginManager.loadPlugins(pluginJars);
+        
+        SomeEvent event = pluginManager.fireEvent(new SomeEvent());
+        if (!event.isCancelled()) {
+            // Do something if the event has not been cancelled
+        }
     }
 }
 
@@ -57,7 +62,8 @@ public abstract class CoolSoftwarePlugin extends Plugin<CoolSoftwareAPI> {
     // Implement methods
 }
 
-public class SomeEvent extends Event {
+// Events can extend Event if you don't want to allow cancellation
+public class SomeEvent extends CancellableEvent {
     public String exampleEventMethod() {
         return "SomeEvent example";
     }
@@ -70,6 +76,7 @@ public class EventListener implements Listener {
     @EventHandler
     public onEvent(SomeEvent e) {
         e.exampleEventMethod();
+        e.setCancelled(true);
     }
 }
 
