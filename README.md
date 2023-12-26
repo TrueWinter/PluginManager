@@ -17,7 +17,8 @@ PluginManager is a library that can be easily integrated with your software to a
         <dependency>
             <groupId>dev.truewinter</groupId>
             <artifactId>PluginManager</artifactId>
-            <version>0.0.1</version>
+            <!-- Check the releases page for the latest version -->
+            <version>{version}</version>
         </dependency>
     </dependencies>
 </project>
