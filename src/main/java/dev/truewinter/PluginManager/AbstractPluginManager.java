@@ -9,7 +9,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -26,12 +25,14 @@ public abstract class AbstractPluginManager<T> {
     private boolean allPluginsLoaded = false;
     private final ConcurrentHashMap<String, Plugin<T>> plugins = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Class<? extends Event>, LinkedHashMap<Plugin<T>, EventHandlerContainer>> events = new ConcurrentHashMap<>();
+    private final ClassLoader parentClassLoader;
 
     /**
      * Instantiates the PluginManager with a simple logger.
      * This should only be used in development.
+     * @param classLoader The class loader of your API package
      */
-    public AbstractPluginManager() {
+    public AbstractPluginManager(ClassLoader classLoader) {
         this.logger = log -> {
             if (log.getException() != null) {
                 System.err.printf("[%s] %s %s%n", log.getPluginName(), log.getEvent().name(), log.getException());
@@ -39,14 +40,18 @@ public abstract class AbstractPluginManager<T> {
                 System.out.printf("[%s] %s%n", log.getPluginName(), log.getEvent().name());
             }
         };
+
+        this.parentClassLoader = classLoader;
     }
 
     /**
      * Instantiates the PluginManager with a custom logger
+     * @param classLoader The class loader of your API package
      * @param logger Logger
      */
-    public AbstractPluginManager(Consumer<Logger.PluginManagerLog> logger) {
+    public AbstractPluginManager(ClassLoader classLoader, Consumer<Logger.PluginManagerLog> logger) {
         this.logger = logger;
+        this.parentClassLoader = classLoader;
     }
 
     /**
@@ -60,7 +65,7 @@ public abstract class AbstractPluginManager<T> {
             try {
                 URLClassLoader plugin = new URLClassLoader(
                         new URL[]{file.toURI().toURL()},
-                        getClass().getClassLoader()
+                        parentClassLoader
                 );
 
                 String mainClass = getPluginMainClass(plugin);

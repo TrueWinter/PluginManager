@@ -6,7 +6,7 @@
 
     <groupId>dev.truewinter</groupId>
     <artifactId>PluginManager</artifactId>
-    <version>0.0.4</version>
+    <version>0.0.5</version>
 
     <build>
         <finalName>PluginManager-${project.version}</finalName>

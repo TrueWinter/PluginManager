@@ -19,8 +19,8 @@ import java.util.function.Consumer;
  */
 @SuppressWarnings("unused")
 public class PluginManager<T> extends AbstractPluginManager<T> {
-    public PluginManager(Consumer<Logger.PluginManagerLog> logger) {
-        super(logger);
+    public PluginManager(ClassLoader classLoader, Consumer<Logger.PluginManagerLog> logger) {
+        super(classLoader, logger);
     }
 
     @Override
