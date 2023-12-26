@@ -28,14 +28,14 @@ public abstract class Logger {
     public static class PluginManagerLog {
         private final LogEvents event;
         private final String pluginName;
-        private Exception exception = null;
+        private Throwable exception = null;
 
         protected PluginManagerLog(@NotNull LogEvents event, @NotNull String pluginName) {
             this.event = event;
             this.pluginName = pluginName;
         }
 
-        protected PluginManagerLog(@NotNull LogEvents event, @NotNull String pluginName, @NotNull Exception e) {
+        protected PluginManagerLog(@NotNull LogEvents event, @NotNull String pluginName, @NotNull Throwable e) {
             this.event = event;
             this.pluginName = pluginName;
             this.exception = e;
@@ -53,7 +53,7 @@ public abstract class Logger {
         }
 
         @Nullable
-        public Exception getException() {
+        public Throwable getException() {
             return exception;
         }
     }

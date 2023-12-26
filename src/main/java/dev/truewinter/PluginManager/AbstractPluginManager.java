@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
@@ -13,12 +14,11 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.jar.JarEntry;
+import java.util.jar.JarInputStream;
 
 @SuppressWarnings("unused")
 public abstract class AbstractPluginManager<T> {
@@ -65,6 +65,27 @@ public abstract class AbstractPluginManager<T> {
 
                 String mainClass = getPluginMainClass(plugin);
                 String name = getPluginName(plugin);
+
+                try (JarInputStream is = new JarInputStream(new FileInputStream(file))) {
+                    JarEntry jarEntry;
+
+                    while ((jarEntry = is.getNextJarEntry()) != null) {
+                        String jarClassName = jarEntry.getName();
+                        if (!jarClassName.endsWith(".class")) continue;
+                        String className = jarClassName.replace(".class", "")
+                                .replace("/", ".");
+                        try {
+                            plugin.loadClass(className);
+                        } catch (Exception e) {
+                            logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADING_ERROR, name, e));
+                        } catch (NoClassDefFoundError ignored) {
+                            // Sometimes a class which is not included in the
+                            // JAR file, but is referenced gets loaded. There
+                            // are legitimate use-cases for this, so the error
+                            // is being ignored here to allow the plugin to load.
+                        }
+                    }
+                }
 
                 Class<? extends Plugin<T>> pluginClass = getPluginAsSubclass(plugin, mainClass);
                 Plugin<T> pluginInstance = pluginClass.getDeclaredConstructor().newInstance();
