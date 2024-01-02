@@ -10,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +18,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
 
 @SuppressWarnings("unused")
 public abstract class AbstractPluginManager<T> {
@@ -26,6 +30,7 @@ public abstract class AbstractPluginManager<T> {
     private final ConcurrentHashMap<String, Plugin<T>> plugins = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Class<? extends Event>, LinkedHashMap<Plugin<T>, EventHandlerContainer>> events = new ConcurrentHashMap<>();
     private final ClassLoader parentClassLoader;
+    private boolean loadedPlugins = false;
 
     /**
      * Instantiates the PluginManager with a simple logger.
@@ -55,86 +60,100 @@ public abstract class AbstractPluginManager<T> {
     }
 
     /**
-     * Loads the plugins
+     * Loads the plugins. This method must only be called once.
      * @param pluginJars A list of JAR {@link File}s
+     * @throws IllegalStateException if the method is called more than once.
      */
     @MustBeInvokedByOverriders
-    public synchronized void loadPlugins(@NotNull List<File> pluginJars) {
-        for (File file : pluginJars) {
-            Plugin<T> thisPlugin = null;
+    public synchronized void loadPlugins(@NotNull List<File> pluginJars) throws IOException, IllegalStateException {
+        if (loadedPlugins) {
+            throw new IllegalStateException("loadPlugins() may only be called once.");
+        }
+        loadedPlugins = true;
+
+        URL[] urls = pluginJars.stream().map(f -> {
             try {
-                URLClassLoader plugin = new URLClassLoader(
-                        new URL[]{file.toURI().toURL()},
-                        parentClassLoader
-                );
+                return f.toURI().toURL();
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
+        }).toArray(URL[]::new);
 
-                String mainClass = getPluginMainClass(plugin);
-                String name = getPluginName(plugin);
+        try (URLClassLoader classLoader = new URLClassLoader(
+                urls,
+                parentClassLoader
+        )) {
 
-                try (JarInputStream is = new JarInputStream(new FileInputStream(file))) {
-                    JarEntry jarEntry;
+            for (File file : pluginJars) {
+                Plugin<T> thisPlugin = null;
+                try (JarFile jarFile = new JarFile(file)) {
+                    String mainClass = getPluginMainClass(jarFile);
+                    String name = getPluginName(jarFile);
 
-                    while ((jarEntry = is.getNextJarEntry()) != null) {
-                        String jarClassName = jarEntry.getName();
-                        if (!jarClassName.endsWith(".class")) continue;
-                        String className = jarClassName.replace(".class", "")
-                                .replace("/", ".");
-                        try {
-                            plugin.loadClass(className);
-                        } catch (Exception e) {
-                            logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADING_ERROR, name, e));
-                        } catch (NoClassDefFoundError ignored) {
-                            // Sometimes a class which is not included in the
-                            // JAR file, but is referenced gets loaded. There
-                            // are legitimate use-cases for this, so the error
-                            // is being ignored here to allow the plugin to load.
+                    try (JarInputStream is = new JarInputStream(new FileInputStream(file))) {
+                        JarEntry jarEntry;
+
+                        while ((jarEntry = is.getNextJarEntry()) != null) {
+                            String jarClassName = jarEntry.getName();
+                            if (!jarClassName.endsWith(".class")) continue;
+                            String className = jarClassName.replace(".class", "")
+                                    .replace("/", ".");
+                            try {
+                                classLoader.loadClass(className);
+                            } catch (Exception e) {
+                                logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADING_ERROR, name, e));
+                            } catch (NoClassDefFoundError ignored) {
+                                // Sometimes a class which is not included in the
+                                // JAR file, but is referenced gets loaded. There
+                                // are legitimate use-cases for this, so the error
+                                // is being ignored here to allow the plugin to load.
+                            }
                         }
                     }
-                }
 
-                Class<? extends Plugin<T>> pluginClass = getPluginAsSubclass(plugin, mainClass);
-                Plugin<T> pluginInstance = pluginClass.getDeclaredConstructor().newInstance();
-                // thisPlugin is simply here so that if there's an exception past this point,
-                // the exception handler will know what plugin caused it.
-                thisPlugin = pluginInstance;
+                    Class<? extends Plugin<T>> pluginClass = getPluginAsSubclass(classLoader, mainClass);
+                    Plugin<T> pluginInstance = pluginClass.getDeclaredConstructor().newInstance();
+                    // thisPlugin is simply here so that if there's an exception past this point,
+                    // the exception handler will know what plugin caused it.
+                    thisPlugin = pluginInstance;
 
-                invoke(pluginClass, pluginInstance, name,
-                        new MethodConfig("setName", String.class), name);
+                    invoke(pluginClass, pluginInstance, name,
+                            new MethodConfig("setName", String.class), name);
 
-                invoke(pluginClass, pluginInstance, name,
-                        new MethodConfig("setDirectory", String.class), file.getParent());
+                    invoke(pluginClass, pluginInstance, name,
+                            new MethodConfig("setDirectory", String.class), file.getParent());
 
-                URL defaultConfigUrl = plugin.getResource(pluginInstance.getConfigFileName());
-                if (defaultConfigUrl != null) {
-                    try (InputStream is = defaultConfigUrl.openStream()) {
-                        invoke(pluginClass, pluginInstance, name,
-                                new MethodConfig("setDefaultConfig", String.class),
-                                IOUtils.toString(is, StandardCharsets.UTF_8));
-                    }
-                }
-
-                plugins.put(name, pluginInstance);
-
-                Method onLoadMethod = pluginClass.getDeclaredMethod("onLoad");
-                onLoadMethod.setAccessible(true);
-                onLoadMethod.invoke(pluginInstance);
-
-                logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADED, name));
-                plugin.close();
-            } catch (Exception e) {
-                logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADING_ERROR, file.getName(), e));
-
-                if (thisPlugin != null) {
-                    if (thisPlugin.getName() != null) {
-                        plugins.remove(thisPlugin.getName());
+                    ZipEntry defaultConfigUrl = jarFile.getEntry(pluginInstance.getConfigFileName());
+                    if (defaultConfigUrl != null) {
+                        try (InputStream is = jarFile.getInputStream(defaultConfigUrl)) {
+                            invoke(pluginClass, pluginInstance, name,
+                                    new MethodConfig("setDefaultConfig", String.class),
+                                    IOUtils.toString(is, StandardCharsets.UTF_8));
+                        }
                     }
 
-                    try {
-                        Method onUnloadMethod = thisPlugin.getClass().getDeclaredMethod("onUnload");
-                        onUnloadMethod.setAccessible(true);
-                        onUnloadMethod.invoke(thisPlugin);
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex);
+                    plugins.put(name, pluginInstance);
+
+                    Method onLoadMethod = pluginClass.getDeclaredMethod("onLoad");
+                    onLoadMethod.setAccessible(true);
+                    onLoadMethod.invoke(pluginInstance);
+
+                    logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADED, name));
+                } catch (Exception e) {
+                    logger.accept(new Logger.PluginManagerLog(Logger.LogEvents.PLUGIN_LOADING_ERROR, file.getName(), e));
+
+                    if (thisPlugin != null) {
+                        if (thisPlugin.getName() != null) {
+                            plugins.remove(thisPlugin.getName());
+                        }
+
+                        try {
+                            Method onUnloadMethod = thisPlugin.getClass().getDeclaredMethod("onUnload");
+                            onUnloadMethod.setAccessible(true);
+                            onUnloadMethod.invoke(thisPlugin);
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
                     }
                 }
             }
@@ -326,14 +345,12 @@ public abstract class AbstractPluginManager<T> {
     private record EventHandlerContainer(Listener instance, Method method) {}
 
     /**
-     * @param plugin A URLClassLoader
      * @return The plugin's main class
      */
-    protected abstract String getPluginMainClass(@NotNull URLClassLoader plugin) throws IOException;
+    protected abstract String getPluginMainClass(@NotNull JarFile jarFile) throws IOException;
 
     /**
-     * @param plugin A URLClassLoader
      * @return The plugin's name
      */
-    protected abstract String getPluginName(@NotNull URLClassLoader plugin) throws IOException;
+    protected abstract String getPluginName(@NotNull JarFile jarFile) throws IOException;
 }

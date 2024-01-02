@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.URLClassLoader;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.jar.JarFile;
 
 /**
  * <p>The default PluginManager which requires a <code>plugin.yml</code> file in the resources directory containing the following:</p>
@@ -24,19 +25,16 @@ public class PluginManager<T> extends AbstractPluginManager<T> {
     }
 
     @Override
-    protected final String getPluginMainClass(@NotNull URLClassLoader plugin) throws IOException {
-        return getPluginYaml(plugin).getString("main_class");
+    protected final String getPluginMainClass(@NotNull JarFile jarFile) throws IOException {
+        return getPluginYaml(jarFile).getString("main_class");
     }
 
     @Override
-    protected final String getPluginName(@NotNull URLClassLoader plugin) throws IOException {
-        return getPluginYaml(plugin).getString("name");
+    protected final String getPluginName(@NotNull JarFile jarFile) throws IOException {
+        return getPluginYaml(jarFile).getString("name");
     }
 
-    /**
-     * @hidden
-     */
-    private YamlDocument getPluginYaml(URLClassLoader plugin) throws IOException {
-        return YamlDocument.create(Objects.requireNonNull(plugin.getResourceAsStream("plugin.yml")));
+    private YamlDocument getPluginYaml(JarFile jarFile) throws IOException {
+        return YamlDocument.create(Objects.requireNonNull(jarFile.getInputStream(jarFile.getEntry("plugin.yml"))));
     }
 }
