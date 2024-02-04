@@ -126,4 +126,4 @@ CoolPlugin's `pom.xml` should look similar to the following:
 
 ## Docs
 
-[Javadoc available on Jitpack](https://javadoc.jitpack.io/com/github/TrueWinter/PluginManager/latest/javadoc/)
+[Javadoc available on Jitpack](https://javadoc.jitpack.io/dev/TrueWinter/PluginManager/latest/javadoc/)
