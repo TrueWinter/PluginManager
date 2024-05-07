@@ -46,7 +46,7 @@ public abstract class Plugin<T> {
     /**
      * @return The plugin's name
      */
-    protected final String getName() {
+    public final String getName() {
         // This method is used internally before the plugin is loaded,
         // so don't call ensureNoApiInteractionInConstructor() here
         return name;

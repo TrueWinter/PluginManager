@@ -111,16 +111,6 @@ CoolPlugin's `pom.xml` should look similar to the following:
         <version>{version}</version>
         <scope>provided</scope>
     </dependency>
-    <!--
-        boosted-yaml is used to load the plugin.yml file.
-        Due to a class loading issue, a ClassNotFoundException
-        will be thrown if it is not included in the plugin's dependencies.
-     -->
-    <dependency>
-        <groupId>dev.dejvokep</groupId>
-        <artifactId>boosted-yaml</artifactId>
-        <version>1.3.1</version>
-    </dependency>
 </dependencies>
 ```
 
