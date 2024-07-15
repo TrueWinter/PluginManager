@@ -5,20 +5,13 @@ PluginManager is a library that can be easily integrated with your software to a
 ## Usage
 
 ```xml
-<project>
-    <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-    </repositories>
-    
+<project>    
     <dependencies>
         <dependency>
             <groupId>dev.truewinter</groupId>
             <artifactId>PluginManager</artifactId>
             <!-- Check the releases page for the latest version -->
-            <version>{version}</version>
+            <version>0.0.0</version>
         </dependency>
     </dependencies>
 </project>
